@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUser } from "@/app/utils/auth";
-import Image from 'next/image';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -10,6 +9,14 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [selectedScan, setSelectedScan] = useState(null);
   const [user, setUser] = useState(null);
+  const [imageErrors, setImageErrors] = useState({});
+
+  // Helper function to construct image URL
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return '';
+    const id = imageUrl.split('/').pop();
+    return `/api/images?id=${id}`; // Changed to use query parameter format
+  };
 
   useEffect(() => {
     const currentUser = getUser();
@@ -28,20 +35,28 @@ export default function HistoryPage() {
       const data = await response.json();
       
       if (data.success) {
-        // Sort scans by date, newest first
-        const sortedScans = data.scans.sort((a, b) => 
-          new Date(b.createdAt) - new Date(a.createdAt)
-        );
+        const sortedScans = data.scans
+          .map(scan => ({
+            ...scan,
+            imageUrl: getImageUrl(scan.imageUrl)
+          }))
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setScans(sortedScans);
       } else {
         throw new Error(data.error || 'Failed to fetch scans');
       }
     } catch (error) {
       console.error('Error:', error);
-      // You might want to show an error message to the user
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImageError = (scanId) => {
+    setImageErrors(prev => ({
+      ...prev,
+      [scanId]: true
+    }));
   };
 
   if (loading) {
@@ -74,16 +89,25 @@ export default function HistoryPage() {
               onClick={() => setSelectedScan(selectedScan?._id === scan._id ? null : scan)}
             >
               <div className="flex gap-6">
-                {/* Image Section */}
-                <div className="w-32 h-32 relative rounded-lg overflow-hidden">
-                  <Image
-                    src={scan.imageUrl}
-                    alt="Wound scan"
-                    fill
-                    className="object-cover"
-                  />
+                {/* Updated Image Section */}
+                <div className="w-32 h-32 relative rounded-lg overflow-hidden bg-gray-100">
+                  {!imageErrors[scan._id] ? (
+                    <img
+                      src={scan.imageUrl}
+                      alt="Wound scan"
+                      className="w-full h-full object-cover"
+                      onError={() => handleImageError(scan._id)}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-gray-400 text-sm text-center">
+                        Gagal memuat gambar
+                      </p>
+                    </div>
+                  )}
                 </div>
-                
+
                 {/* Content Section */}
                 <div className="flex-1">
                   {/* Header */}
