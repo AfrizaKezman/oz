@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { MongoClient } from "mongodb";
+import { Binary } from "mongodb";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public/uploads");
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+// MongoDB connection
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
+
 export async function POST(req) {
     try {
-        // Ensure upload directory exists
-        await mkdir(UPLOAD_DIR, { recursive: true });
-
         const formData = await req.formData();
         const file = formData.get("file");
 
@@ -43,25 +43,27 @@ export async function POST(req) {
         // Create unique filename with sanitization
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '');
         const filename = `${Date.now()}-${sanitizedName}`;
-        const filepath = path.join(UPLOAD_DIR, filename);
 
-        // Save file with error handling
-        try {
-            await writeFile(filepath, buffer);
-        } catch (writeError) {
-            console.error("File write error:", writeError);
-            return NextResponse.json(
-                { success: false, error: "Gagal menyimpan file" },
-                { status: 500 }
-            );
-        }
+        await client.connect();
+        const db = client.db(process.env.MONGODB_DB);
+        
+        // Store file in MongoDB
+        const result = await db.collection('uploads').insertOne({
+            filename,
+            contentType: file.type,
+            uploadDate: new Date(),
+            data: new Binary(buffer)
+        });
 
-        // Return success with relative URL
+        // Create API endpoint URL for retrieving the image
+        const imageUrl = `/api/images/${result.insertedId}`;
+
         return NextResponse.json({
             success: true,
-            imageUrl: `/uploads/${filename}`,
+            imageUrl,
             size: buffer.length,
-            type: file.type
+            type: file.type,
+            _id: result.insertedId
         });
 
     } catch (error) {
@@ -70,5 +72,7 @@ export async function POST(req) {
             { success: false, error: "Terjadi kesalahan saat upload" },
             { status: 500 }
         );
+    } finally {
+        await client.close();
     }
 }
