@@ -11,90 +11,155 @@ export default function ConsultPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [user, setUser] = useState(null);
   const messagesEndRef = useRef(null);
-  
+  const abortController = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Scroll handler
+  const scrollToBottom = async () => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay for DOM update
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch (error) {
+      console.error("Scroll error:", error);
+    }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    const currentUser = getUser();
-    if (!currentUser && requireAuth(router.pathname)) {
-      router.replace('/login');
-      return;
-    }
-    setUser(currentUser);
-    fetchMessages(currentUser?.username);
-  }, [router.pathname]);
-
+  // Message fetching
   const fetchMessages = async (username) => {
     if (!username) return;
 
     try {
-      const res = await fetch(`/api/consultations?username=${username}`);
-      const data = await res.json();
-      
+      setLoading(true);
+      if (abortController.current) {
+        abortController.current.abort();
+      }
+      abortController.current = new AbortController();
+      const response = await fetch(
+        `/api/consultations?username=${encodeURIComponent(username)}`,
+        {
+          signal: abortController.current.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
       if (data.success && data.consultation) {
         setMessages(data.consultation.messages || []);
+        await scrollToBottom();
+      } else {
+        throw new Error(data.error || "Failed to fetch messages");
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error fetching messages:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!input.trim() || !user || sendingMessage) return;
-
-    const tempId = `temp-${Date.now()}`;
-    const newMessage = {
-      _id: tempId,
-      content: input.trim(),
-      username: user.username,
-      role: 'user',
-      timestamp: new Date().toISOString(),
-      pending: true
-    };
-
-    setInput("");
-    setMessages(prev => [...prev, newMessage]);
-    setSendingMessage(true);
-
+  // Message sending
+  const sendMessage = async (messageContent, username) => {
     try {
-      const res = await fetch("/api/consultations", {
+      const response = await fetch("/api/consultations", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json"
+        headers: {
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          content: newMessage.content,
-          username: user.username,
-          role: 'user'
+          content: messageContent,
+          username: username,
+          role: "user",
         }),
       });
 
-      const data = await res.json();
-      
-      if (data.success && data.messages) {
-        // Replace temporary message with server response
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to send message");
+      }
+
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  // Message handler
+  const handleSendMessage = async (e) => {
+    e?.preventDefault();
+
+    if (!input.trim() || !user || sendingMessage) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const messageContent = input.trim();
+
+    // Create temporary message
+    const newMessage = {
+      _id: tempId,
+      content: messageContent,
+      username: user.username,
+      role: "user",
+      timestamp: new Date().toISOString(),
+      pending: true,
+    };
+
+    try {
+      setSendingMessage(true);
+      setInput("");
+      setMessages((prev) => [...prev, newMessage]);
+
+      // Send message to server
+      const data = await sendMessage(messageContent, user.username);
+
+      if (data.messages) {
         setMessages(data.messages);
-      } else {
-        // Remove failed message
-        setMessages(prev => prev.filter(msg => msg._id !== tempId));
+        await scrollToBottom();
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error sending message:", error);
       // Remove failed message
-      setMessages(prev => prev.filter(msg => msg._id !== tempId));
+      setMessages((prev) => prev.filter((msg) => msg._id !== tempId));
     } finally {
       setSendingMessage(false);
     }
   };
+
+  // Auth check and initial message fetch
+  useEffect(() => {
+    const initializeChat = async () => {
+      const currentUser = getUser();
+      if (!currentUser && requireAuth(router.pathname)) {
+        await router.replace("/login");
+        return;
+      }
+      setUser(currentUser);
+      if (currentUser?.username) {
+        await fetchMessages(currentUser.username);
+      }
+    };
+
+    initializeChat();
+  }, [router.pathname]);
+
+  // Auto scroll on new messages
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortController.current) {
+        abortController.current.abort();
+      }
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -124,14 +189,14 @@ export default function ConsultPage() {
                 <div
                   key={msg._id || msg.timestamp}
                   className={`mb-4 flex ${
-                    msg.role === 'doctor' ? 'justify-start' : 'justify-end'
+                    msg.role === "doctor" ? "justify-start" : "justify-end"
                   }`}
                 >
                   <div
                     className={`max-w-[70%] p-3 rounded-lg ${
-                      msg.role === 'doctor'
-                        ? 'bg-gray-100'
-                        : 'bg-purple-100'
+                      msg.role === "doctor"
+                        ? "bg-gray-100"
+                        : "bg-purple-100"
                     }`}
                   >
                     <p>{msg.content}</p>
@@ -141,7 +206,7 @@ export default function ConsultPage() {
                           <span className="animate-pulse">Mengirim...</span>
                         </span>
                       ) : (
-                        new Date(msg.timestamp).toLocaleString('id-ID')
+                        new Date(msg.timestamp).toLocaleString("id-ID")
                       )}
                     </small>
                   </div>
@@ -157,7 +222,9 @@ export default function ConsultPage() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+            onKeyDown={(e) =>
+              e.key === "Enter" && !e.shiftKey && handleSendMessage()
+            }
             placeholder="Ketik pesan..."
             className="flex-1 p-2 border rounded"
             disabled={sendingMessage}
@@ -167,7 +234,7 @@ export default function ConsultPage() {
             className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
             disabled={sendingMessage || !input.trim()}
           >
-            {sendingMessage ? 'Mengirim...' : 'Kirim'}
+            {sendingMessage ? "Mengirim..." : "Kirim"}
           </button>
         </div>
       </div>
