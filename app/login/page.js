@@ -5,7 +5,46 @@ import Swal from "sweetalert2";
 import { FiUser, FiLock, FiMail, FiEye, FiEyeOff, FiCheck } from "react-icons/fi";
 import { FaHeartbeat, FaGoogle, FaApple } from 'react-icons/fa'; // Add these imports
 
-// ...existing login and register functions...
+const validateUsername = (username) => {
+  const minLength = 8;
+  const validChars = /^[a-zA-Z0-9_]+$/; // Only allow letters, numbers, and underscore
+  
+  if (username.length < minLength) {
+    return { 
+      isValid: false, 
+      error: `Username harus minimal ${minLength} karakter` 
+    };
+  }
+  
+  if (!validChars.test(username)) {
+    return { 
+      isValid: false, 
+      error: "Username hanya boleh mengandung huruf, angka, dan underscore" 
+    };
+  }
+
+  return { isValid: true };
+};
+
+const validatePassword = (password) => {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  const errors = [];
+  if (password.length < minLength) errors.push(`Minimal ${minLength} karakter`);
+  if (!hasUpperCase) errors.push("Minimal 1 huruf besar");
+  if (!hasLowerCase) errors.push("Minimal 1 huruf kecil");
+  if (!hasNumbers) errors.push("Minimal 1 angka");
+  if (!hasSpecialChar) errors.push("Minimal 1 karakter spesial");
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -64,8 +103,25 @@ export default function LoginPage() {
           setMsg(data.error || "Login gagal");
         }
       } else {
+        // Validate username
+        const usernameValidation = validateUsername(form.username);
+        if (!usernameValidation.isValid) {
+          setMsg(usernameValidation.error);
+          setLoading(false);
+          return;
+        }
+
+        // Validate password
+        const passwordValidation = validatePassword(form.password);
+        if (!passwordValidation.isValid) {
+          setMsg("Password harus memenuhi kriteria berikut:\n" + passwordValidation.errors.join("\n"));
+          setLoading(false);
+          return;
+        }
+
         if (form.password !== form.confirmPassword) {
           setMsg("Password dan konfirmasi password tidak cocok");
+          setLoading(false);
           return;
         }
 
@@ -113,7 +169,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
 
   const features = [
     {
@@ -260,19 +315,22 @@ export default function LoginPage() {
               </div>
 
               {!isLogin && (
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiLock className="h-5 w-5 text-gray-400" />
+                <div className="space-y-1">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FiLock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="confirmPassword"
+                      value={form.confirmPassword}
+                      onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                      placeholder="Konfirmasi Password"
+                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                      required
+                    />
                   </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    value={form.confirmPassword}
-                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                    placeholder="Konfirmasi Password"
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-                    required
-                  />
+                  <PasswordRequirements password={form.password} />
                 </div>
               )}
             </div>
@@ -324,3 +382,30 @@ export default function LoginPage() {
     </div>
   );
 }
+
+const PasswordRequirements = ({ password }) => {
+  const requirements = [
+    { text: "Minimal 8 karakter", met: password.length >= 8 },
+    { text: "Minimal 1 huruf besar", met: /[A-Z]/.test(password) },
+    { text: "Minimal 1 huruf kecil", met: /[a-z]/.test(password) },
+    { text: "Minimal 1 angka", met: /\d/.test(password) },
+    { text: "Minimal 1 karakter spesial", met: /[!@#$%^&*(),.?":{}|<>]/.test(password) }
+  ];
+
+  return (
+    <div className="text-xs space-y-1 mt-2">
+      {requirements.map((req, index) => (
+        <div key={index} className="flex items-center space-x-2">
+          <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+            req.met ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+          }`}>
+            <FiCheck className="w-3 h-3" />
+          </div>
+          <span className={req.met ? 'text-green-600' : 'text-gray-500'}>
+            {req.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
