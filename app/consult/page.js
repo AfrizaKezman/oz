@@ -23,22 +23,32 @@ export default function ConsultPage() {
     }
   };
 
-  // Message fetching
+  // Message fetching with better abort handling
   const fetchMessages = async (username) => {
     if (!username) return;
 
+    // Create new abort controller for this request
+    const controller = new AbortController();
+    abortController.current = controller;
+
     try {
       setLoading(true);
-      if (abortController.current) {
-        abortController.current.abort();
-      }
-      abortController.current = new AbortController();
       const response = await fetch(
         `/api/consultations?username=${encodeURIComponent(username)}`,
         {
-          signal: abortController.current.signal,
+          signal: controller.signal,
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
         }
       );
+
+      // Check if request was aborted
+      if (controller.signal.aborted) {
+        console.log("Request was aborted");
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -46,16 +56,24 @@ export default function ConsultPage() {
 
       const data = await response.json();
 
-      if (data.success && data.consultation) {
-        setMessages(data.consultation.messages || []);
-        await scrollToBottom();
-      } else {
-        throw new Error(data.error || "Failed to fetch messages");
+      // Check again if aborted before updating state
+      if (!controller.signal.aborted) {
+        if (data.success && data.consultation) {
+          setMessages(data.consultation.messages || []);
+          await scrollToBottom();
+        } else {
+          throw new Error(data.error || "Failed to fetch messages");
+        }
       }
     } catch (error) {
-      console.error("Error fetching messages:", error);
+      // Only log error if it's not an abort error
+      if (error.name !== "AbortError") {
+        console.error("Error fetching messages:", error);
+      }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -130,7 +148,18 @@ export default function ConsultPage() {
     }
   };
 
-  // Auth check and initial message fetch
+  // Update cleanup effect
+  useEffect(() => {
+    return () => {
+      if (abortController.current) {
+        console.log("Cleaning up abort controller");
+        abortController.current.abort();
+        abortController.current = null;
+      }
+    };
+  }, []);
+
+  // Update initialization effect
   useEffect(() => {
     const initializeChat = async () => {
       const currentUser = getUser();
@@ -138,6 +167,10 @@ export default function ConsultPage() {
         await router.replace("/login");
         return;
       }
+
+      // Only set user and fetch messages if component is still mounted
+      if (abortController.current?.signal.aborted) return;
+
       setUser(currentUser);
       if (currentUser?.username) {
         await fetchMessages(currentUser.username);
@@ -151,15 +184,6 @@ export default function ConsultPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (abortController.current) {
-        abortController.current.abort();
-      }
-    };
-  }, []);
 
   if (loading) {
     return (
