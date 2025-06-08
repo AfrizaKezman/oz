@@ -11,179 +11,90 @@ export default function ConsultPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [user, setUser] = useState(null);
   const messagesEndRef = useRef(null);
-  const abortController = useRef(null);
+  
 
-  // Scroll handler
-  const scrollToBottom = async () => {
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay for DOM update
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch (error) {
-      console.error("Scroll error:", error);
-    }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Message fetching with better abort handling
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    const currentUser = getUser();
+    if (!currentUser && requireAuth(router.pathname)) {
+      router.replace('/login');
+      return;
+    }
+    setUser(currentUser);
+    fetchMessages(currentUser?.username);
+  }, [router.pathname]);
+
   const fetchMessages = async (username) => {
     if (!username) return;
 
-    // Create new abort controller for this request
-    const controller = new AbortController();
-    abortController.current = controller;
-
     try {
-      setLoading(true);
-      const response = await fetch(
-        `/api/consultations?username=${encodeURIComponent(username)}`,
-        {
-          signal: controller.signal,
-          headers: {
-            "Cache-Control": "no-cache",
-            Pragma: "no-cache",
-          },
-        }
-      );
-
-      // Check if request was aborted
-      if (controller.signal.aborted) {
-        console.log("Request was aborted");
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Check again if aborted before updating state
-      if (!controller.signal.aborted) {
-        if (data.success && data.consultation) {
-          setMessages(data.consultation.messages || []);
-          await scrollToBottom();
-        } else {
-          throw new Error(data.error || "Failed to fetch messages");
-        }
+      const res = await fetch(`/api/consultations?username=${username}`);
+      const data = await res.json();
+      
+      if (data.success && data.consultation) {
+        setMessages(data.consultation.messages || []);
       }
     } catch (error) {
-      // Only log error if it's not an abort error
-      if (error.name !== "AbortError") {
-        console.error("Error fetching messages:", error);
-      }
+      console.error("Error:", error);
     } finally {
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
-  // Message sending
-  const sendMessage = async (messageContent, username) => {
-    try {
-      const response = await fetch("/api/consultations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: messageContent,
-          username: username,
-          role: "user",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "Failed to send message");
-      }
-
-      return data;
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  // Message handler
-  const handleSendMessage = async (e) => {
-    e?.preventDefault();
-
+  const handleSendMessage = async () => {
     if (!input.trim() || !user || sendingMessage) return;
 
     const tempId = `temp-${Date.now()}`;
-    const messageContent = input.trim();
-
-    // Create temporary message
     const newMessage = {
       _id: tempId,
-      content: messageContent,
+      content: input.trim(),
       username: user.username,
-      role: "user",
+      role: 'user',
       timestamp: new Date().toISOString(),
-      pending: true,
+      pending: true
     };
 
+    setInput("");
+    setMessages(prev => [...prev, newMessage]);
+    setSendingMessage(true);
+
     try {
-      setSendingMessage(true);
-      setInput("");
-      setMessages((prev) => [...prev, newMessage]);
+      const res = await fetch("/api/consultations", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          content: newMessage.content,
+          username: user.username,
+          role: 'user'
+        }),
+      });
 
-      // Send message to server
-      const data = await sendMessage(messageContent, user.username);
-
-      if (data.messages) {
+      const data = await res.json();
+      
+      if (data.success && data.messages) {
+        // Replace temporary message with server response
         setMessages(data.messages);
-        await scrollToBottom();
+      } else {
+        // Remove failed message
+        setMessages(prev => prev.filter(msg => msg._id !== tempId));
       }
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error:", error);
       // Remove failed message
-      setMessages((prev) => prev.filter((msg) => msg._id !== tempId));
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
     } finally {
       setSendingMessage(false);
     }
   };
-
-  // Update cleanup effect
-  useEffect(() => {
-    return () => {
-      if (abortController.current) {
-        console.log("Cleaning up abort controller");
-        abortController.current.abort();
-        abortController.current = null;
-      }
-    };
-  }, []);
-
-  // Update initialization effect
-  useEffect(() => {
-    const initializeChat = async () => {
-      const currentUser = getUser();
-      if (!currentUser && requireAuth(router.pathname)) {
-        await router.replace("/login");
-        return;
-      }
-
-      // Only set user and fetch messages if component is still mounted
-      if (abortController.current?.signal.aborted) return;
-
-      setUser(currentUser);
-      if (currentUser?.username) {
-        await fetchMessages(currentUser.username);
-      }
-    };
-
-    initializeChat();
-  }, [router.pathname]);
-
-  // Auto scroll on new messages
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   if (loading) {
     return (
@@ -213,14 +124,14 @@ export default function ConsultPage() {
                 <div
                   key={msg._id || msg.timestamp}
                   className={`mb-4 flex ${
-                    msg.role === "doctor" ? "justify-start" : "justify-end"
+                    msg.role === 'doctor' ? 'justify-start' : 'justify-end'
                   }`}
                 >
                   <div
                     className={`max-w-[70%] p-3 rounded-lg ${
-                      msg.role === "doctor"
-                        ? "bg-gray-100"
-                        : "bg-purple-100"
+                      msg.role === 'doctor'
+                        ? 'bg-gray-100'
+                        : 'bg-purple-100'
                     }`}
                   >
                     <p>{msg.content}</p>
@@ -230,7 +141,7 @@ export default function ConsultPage() {
                           <span className="animate-pulse">Mengirim...</span>
                         </span>
                       ) : (
-                        new Date(msg.timestamp).toLocaleString("id-ID")
+                        new Date(msg.timestamp).toLocaleString('id-ID')
                       )}
                     </small>
                   </div>
@@ -246,9 +157,7 @@ export default function ConsultPage() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === "Enter" && !e.shiftKey && handleSendMessage()
-            }
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
             placeholder="Ketik pesan..."
             className="flex-1 p-2 border rounded"
             disabled={sendingMessage}
@@ -258,7 +167,7 @@ export default function ConsultPage() {
             className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
             disabled={sendingMessage || !input.trim()}
           >
-            {sendingMessage ? "Mengirim..." : "Kirim"}
+            {sendingMessage ? 'Mengirim...' : 'Kirim'}
           </button>
         </div>
       </div>
