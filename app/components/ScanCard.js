@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { useState } from 'react';
 
 export default function ScanCard({
   scan,
@@ -9,8 +10,11 @@ export default function ScanCard({
   setDiagnosis,
   recommendation,
   setRecommendation,
-  handleScanReview
+  handleScanReview,
+  imageUrl // Add imageUrl prop
 }) {
+  const [imageError, setImageError] = useState(false);
+
   return (
     <div
       className={`bg-white rounded-lg shadow p-6 ${
@@ -18,16 +22,21 @@ export default function ScanCard({
       }`}
     >
       <div className="flex gap-4">
-        <div
-          className="w-32 h-32 relative rounded overflow-hidden cursor-pointer"
-          onClick={() => setSelectedImage(scan.imageUrl)}
-        >
-          <Image
-            src={scan.imageUrl}
-            alt="Wound scan"
-            fill
-            className="object-cover hover:opacity-75 transition-opacity"
-          />
+        <div className="w-32 h-32 relative rounded overflow-hidden cursor-pointer">
+          {!imageError ? (
+            <img
+              src={imageUrl}
+              alt={`Wound scan from ${scan.username}`}
+              className="w-full h-full object-contain"
+              onClick={() => setSelectedImage(imageUrl)}
+              onError={() => setImageError(true)}
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-400">Gagal memuat gambar</p>
+            </div>
+          )}
         </div>
         <div className="flex-1">
           <div className="flex justify-between items-start mb-3">

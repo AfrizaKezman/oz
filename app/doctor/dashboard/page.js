@@ -7,6 +7,15 @@ import ImageModal from "@/app/components/ImageModal";
 import ChatWindow from "@/app/components/ChatWindow";
 import ScanCard from "@/app/components/ScanCard";
 
+// Add helper function for image URL handling
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return '';
+  if (imageUrl.startsWith('/api/images/')) return imageUrl;
+  if (imageUrl.startsWith('http')) return imageUrl;
+  const id = imageUrl.split('/').pop();
+  return `/api/images?id=${id}`;
+};
+
 export default function DoctorDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('consultations');
@@ -39,7 +48,15 @@ export default function DoctorDashboard() {
         const res = await fetch('/api/consultations');
         const data = await res.json();
         if (data.success) {
-          setConsultations(data.consultations || []);
+          // Transform image URLs in consultations
+          const transformedConsultations = (data.consultations || []).map(consultation => ({
+            ...consultation,
+            messages: consultation.messages?.map(msg => ({
+              ...msg,
+              imageUrl: msg.imageUrl ? getImageUrl(msg.imageUrl) : null
+            }))
+          }));
+          setConsultations(transformedConsultations);
         } else {
           throw new Error(data.error || 'Failed to fetch consultations');
         }
@@ -47,7 +64,12 @@ export default function DoctorDashboard() {
         const res = await fetch('/api/scan/pending');
         const data = await res.json();
         if (data.success) {
-          setScans(data.scans || []);
+          // Transform image URLs in scans
+          const transformedScans = (data.scans || []).map(scan => ({
+            ...scan,
+            imageUrl: getImageUrl(scan.imageUrl)
+          }));
+          setScans(transformedScans);
         } else {
           throw new Error(data.error || 'Failed to fetch scans');
         }
@@ -195,6 +217,7 @@ export default function DoctorDashboard() {
               recommendation={recommendation}
               setRecommendation={setRecommendation}
               handleScanReview={handleScanReview}
+              imageUrl={scan.imageUrl} // Pass transformed URL
             />
           ))}
         </div>
@@ -202,7 +225,7 @@ export default function DoctorDashboard() {
 
       {selectedImage && (
         <ImageModal
-          imageUrl={selectedImage}
+          imageUrl={getImageUrl(selectedImage)} // Transform URL for modal
           onClose={() => setSelectedImage(null)}
         />
       )}
