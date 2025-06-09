@@ -2,11 +2,18 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, requireAuth } from "@/app/utils/auth";
-import Image from "next/image";
 import ImageModal from "@/app/components/ImageModal";
 import ChatWindow from "@/app/components/ChatWindow";
 import ScanCard from "@/app/components/ScanCard";
-import { getImageUrl } from "@/app/utils/imageUrl";
+
+// Helper function for image URL handling
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return '';
+  if (imageUrl.startsWith('/api/images/')) return imageUrl;
+  if (imageUrl.startsWith('http')) return imageUrl;
+  const id = imageUrl.replace(/^\/|\/$/g, '').split('/').pop();
+  return `/api/images?id=${id}`;
+};
 
 export default function DoctorDashboard() {
   const router = useRouter();
@@ -21,6 +28,7 @@ export default function DoctorDashboard() {
   const [recommendation, setRecommendation] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [error, setError] = useState(null);
+  const [imageErrors, setImageErrors] = useState({});
 
   useEffect(() => {
     const currentUser = getUser();
@@ -31,11 +39,20 @@ export default function DoctorDashboard() {
     fetchData();
   }, [router.pathname, activeTab]);
 
+  const handleImageError = (scanId) => {
+    console.error('Image load error for scan:', scanId);
+    setImageErrors(prev => ({
+      ...prev,
+      [scanId]: true
+    }));
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+      setImageErrors({});
+
       if (activeTab === 'scans') {
         const res = await fetch('/api/scan/pending', {
           headers: {
@@ -44,7 +61,7 @@ export default function DoctorDashboard() {
           }
         });
         const data = await res.json();
-        
+
         if (data.success) {
           const transformedScans = (data.scans || []).map(scan => ({
             ...scan,
@@ -58,7 +75,14 @@ export default function DoctorDashboard() {
         const res = await fetch('/api/consultations');
         const data = await res.json();
         if (data.success) {
-          setConsultations(data.consultations || []);
+          const transformedConsultations = (data.consultations || []).map(consultation => ({
+            ...consultation,
+            messages: consultation.messages?.map(msg => ({
+              ...msg,
+              imageUrl: msg.imageUrl ? getImageUrl(msg.imageUrl) : null
+            }))
+          }));
+          setConsultations(transformedConsultations);
         } else {
           throw new Error(data.error || 'Failed to fetch consultations');
         }
@@ -89,8 +113,8 @@ export default function DoctorDashboard() {
       const data = await res.json();
       if (data.success) {
         setReplyMessage('');
-        setConsultations(prev => 
-          prev.map(c => c._id === selectedChat._id ? 
+        setConsultations(prev =>
+          prev.map(c => c._id === selectedChat._id ?
             { ...c, messages: data.messages, updatedAt: new Date().toISOString() } : c
           ).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
         );
@@ -160,21 +184,19 @@ export default function DoctorDashboard() {
         <div className="flex gap-4">
           <button
             onClick={() => setActiveTab('consultations')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              activeTab === 'consultations'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors ${activeTab === 'consultations'
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
           >
             Konsultasi
           </button>
           <button
             onClick={() => setActiveTab('scans')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              activeTab === 'scans'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors ${activeTab === 'scans'
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
           >
             Review Scan
           </button>
@@ -206,6 +228,8 @@ export default function DoctorDashboard() {
               recommendation={recommendation}
               setRecommendation={setRecommendation}
               handleScanReview={handleScanReview}
+              onImageError={() => handleImageError(scan._id)}
+              hasImageError={imageErrors[scan._id]}
             />
           ))}
         </div>

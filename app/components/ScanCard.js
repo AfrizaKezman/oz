@@ -1,6 +1,3 @@
-import Image from 'next/image';
-import { useState } from 'react';
-
 export default function ScanCard({
   scan,
   selectedScan,
@@ -10,16 +7,10 @@ export default function ScanCard({
   setDiagnosis,
   recommendation,
   setRecommendation,
-  handleScanReview
+  handleScanReview,
+  onImageError,
+  hasImageError
 }) {
-  const [imageError, setImageError] = useState(false);
-
-  // Helper function to handle image errors
-  const handleImageError = () => {
-    console.error('Failed to load image:', scan.imageUrl);
-    setImageError(true);
-  };
-
   return (
     <div
       className={`bg-white rounded-lg shadow p-6 ${
@@ -29,18 +20,18 @@ export default function ScanCard({
       <div className="flex gap-4">
         {/* Image Section */}
         <div className="w-32 h-32 relative rounded-lg overflow-hidden bg-gray-100">
-          {!imageError ? (
+          {!hasImageError ? (
             <img
               src={scan.imageUrl}
               alt={`Wound scan from ${scan.username}`}
               className="w-full h-full object-cover hover:opacity-75 transition-opacity cursor-pointer"
               onClick={() => setSelectedImage(scan.imageUrl)}
-              onError={handleImageError}
+              onError={onImageError}
               loading="lazy"
             />
           ) : (
             <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400 text-sm text-center">
+              <p className="text-gray-400 text-sm text-center px-2">
                 Gagal memuat gambar
               </p>
             </div>
