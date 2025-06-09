@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
 
+// Helper function to get proper image URL
+const getProperImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('/api/images/')) {
+    const id = url.split('/').pop();
+    return `/api/images?id=${id}`;
+  }
+  return url;
+};
+
 export default function ScanCard({
   scan,
   selectedScan,
@@ -12,22 +22,31 @@ export default function ScanCard({
   handleScanReview
 }) {
   const [imageError, setImageError] = useState(false);
-  const [imageSrc, setImageSrc] = useState(scan.imageUrl);
+  const [imageSrc, setImageSrc] = useState('');
 
   useEffect(() => {
-    setImageSrc(scan.imageUrl);
-    setImageError(false);
+    if (scan.imageUrl) {
+      const properUrl = getProperImageUrl(scan.imageUrl);
+      console.log('Processing image URL:', scan.imageUrl, 'to:', properUrl);
+      setImageSrc(properUrl);
+      setImageError(false);
+    }
   }, [scan.imageUrl]);
 
   const handleImageError = () => {
-    console.error('Image load error:', scan.imageUrl);
+    console.error('Image load error for:', scan.imageUrl);
     setImageError(true);
   };
 
+  const handleImageClick = () => {
+    if (imageSrc) {
+      setSelectedImage(imageSrc);
+    }
+  };
+
   return (
-    <div className={`bg-white rounded-lg shadow p-6 ${
-      selectedScan?._id === scan._id ? 'ring-2 ring-purple-500' : ''
-    }`}>
+    <div className={`bg-white rounded-lg shadow p-6 ${selectedScan?._id === scan._id ? 'ring-2 ring-purple-500' : ''
+      }`}>
       <div className="flex gap-4">
         {/* Image Section */}
         <div className="w-32 h-32 relative rounded-lg overflow-hidden bg-gray-100">
@@ -36,9 +55,10 @@ export default function ScanCard({
               src={imageSrc}
               alt={`Wound scan from ${scan.username}`}
               className="w-full h-full object-cover hover:opacity-75 transition-opacity cursor-pointer"
-              onClick={() => setSelectedImage(imageSrc)}
+              onClick={handleImageClick}
               onError={handleImageError}
               loading="lazy"
+              crossOrigin="anonymous"
             />
           ) : (
             <div className="flex items-center justify-center h-full">
