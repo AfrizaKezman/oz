@@ -2,19 +2,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, requireAuth } from "@/app/utils/auth";
-import Image from "next/image";
+import { getImageUrl } from "@/app/utils/imageUrl";
 import ImageModal from "@/app/components/ImageModal";
 import ChatWindow from "@/app/components/ChatWindow";
 import ScanCard from "@/app/components/ScanCard";
-
-// Add helper function for image URL handling
-const getImageUrl = (imageUrl) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('/api/images/')) return imageUrl;
-  if (imageUrl.startsWith('http')) return imageUrl;
-  const id = imageUrl.split('/').pop();
-  return `/api/images?id=${id}`;
-};
 
 export default function DoctorDashboard() {
   const router = useRouter();
@@ -29,6 +20,8 @@ export default function DoctorDashboard() {
   const [recommendation, setRecommendation] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [error, setError] = useState(null);
+
+  
 
   useEffect(() => {
     const currentUser = getUser();
@@ -45,10 +38,15 @@ export default function DoctorDashboard() {
       setError(null);
       
       if (activeTab === 'consultations') {
-        const res = await fetch('/api/consultations');
+        const res = await fetch('/api/consultations', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
         const data = await res.json();
+        
         if (data.success) {
-          // Transform image URLs in consultations
           const transformedConsultations = (data.consultations || []).map(consultation => ({
             ...consultation,
             messages: consultation.messages?.map(msg => ({
@@ -61,10 +59,15 @@ export default function DoctorDashboard() {
           throw new Error(data.error || 'Failed to fetch consultations');
         }
       } else {
-        const res = await fetch('/api/scan/pending');
+        const res = await fetch('/api/scan/pending', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
         const data = await res.json();
+        
         if (data.success) {
-          // Transform image URLs in scans
           const transformedScans = (data.scans || []).map(scan => ({
             ...scan,
             imageUrl: getImageUrl(scan.imageUrl)
@@ -232,3 +235,14 @@ export default function DoctorDashboard() {
     </div>
   );
 }
+
+export const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return '';
+  // Handle direct API URLs
+  if (imageUrl.startsWith('/api/images/')) return imageUrl;
+  // Handle full URLs
+  if (imageUrl.startsWith('http')) return imageUrl;
+  // Extract ID and return API URL
+  const id = imageUrl.replace(/^\/|\/$/g, '').split('/').pop();
+  return `/api/images?id=${id}`;
+};
