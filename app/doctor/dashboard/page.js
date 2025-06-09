@@ -47,7 +47,7 @@ export default function DoctorDashboard() {
     }));
   };
 
-  const fetchData = async () => {
+   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -65,8 +65,10 @@ export default function DoctorDashboard() {
         if (data.success) {
           const transformedScans = (data.scans || []).map(scan => ({
             ...scan,
-            imageUrl: getImageUrl(scan.imageUrl)
+            _id: scan._id.toString(),
+            imageUrl: scan.imageUrl ? getImageUrl(scan.imageUrl) : null
           }));
+          console.log('Transformed scans:', transformedScans); // Debug log
           setScans(transformedScans);
         } else {
           throw new Error(data.error || 'Failed to fetch scans');
