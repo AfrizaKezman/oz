@@ -2,10 +2,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, requireAuth } from "@/app/utils/auth";
-import { getImageUrl } from "@/app/utils/imageUrl";
+import Image from "next/image";
 import ImageModal from "@/app/components/ImageModal";
 import ChatWindow from "@/app/components/ChatWindow";
 import ScanCard from "@/app/components/ScanCard";
+import { getImageUrl } from "@/app/utils/imageUrl";
 
 export default function DoctorDashboard() {
   const router = useRouter();
@@ -21,8 +22,6 @@ export default function DoctorDashboard() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [error, setError] = useState(null);
 
-  
-
   useEffect(() => {
     const currentUser = getUser();
     if (!currentUser?.role === 'doctor' && requireAuth(router.pathname)) {
@@ -37,28 +36,7 @@ export default function DoctorDashboard() {
       setLoading(true);
       setError(null);
       
-      if (activeTab === 'consultations') {
-        const res = await fetch('/api/consultations', {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-          const transformedConsultations = (data.consultations || []).map(consultation => ({
-            ...consultation,
-            messages: consultation.messages?.map(msg => ({
-              ...msg,
-              imageUrl: msg.imageUrl ? getImageUrl(msg.imageUrl) : null
-            }))
-          }));
-          setConsultations(transformedConsultations);
-        } else {
-          throw new Error(data.error || 'Failed to fetch consultations');
-        }
-      } else {
+      if (activeTab === 'scans') {
         const res = await fetch('/api/scan/pending', {
           headers: {
             'Cache-Control': 'no-cache',
@@ -75,6 +53,14 @@ export default function DoctorDashboard() {
           setScans(transformedScans);
         } else {
           throw new Error(data.error || 'Failed to fetch scans');
+        }
+      } else {
+        const res = await fetch('/api/consultations');
+        const data = await res.json();
+        if (data.success) {
+          setConsultations(data.consultations || []);
+        } else {
+          throw new Error(data.error || 'Failed to fetch consultations');
         }
       }
     } catch (error) {
@@ -220,7 +206,6 @@ export default function DoctorDashboard() {
               recommendation={recommendation}
               setRecommendation={setRecommendation}
               handleScanReview={handleScanReview}
-              imageUrl={scan.imageUrl} // Pass transformed URL
             />
           ))}
         </div>
@@ -228,21 +213,10 @@ export default function DoctorDashboard() {
 
       {selectedImage && (
         <ImageModal
-          imageUrl={getImageUrl(selectedImage)} // Transform URL for modal
+          imageUrl={selectedImage}
           onClose={() => setSelectedImage(null)}
         />
       )}
     </div>
   );
 }
-
-export const getImageUrl = (imageUrl) => {
-  if (!imageUrl) return '';
-  // Handle direct API URLs
-  if (imageUrl.startsWith('/api/images/')) return imageUrl;
-  // Handle full URLs
-  if (imageUrl.startsWith('http')) return imageUrl;
-  // Extract ID and return API URL
-  const id = imageUrl.replace(/^\/|\/$/g, '').split('/').pop();
-  return `/api/images?id=${id}`;
-};

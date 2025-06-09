@@ -67,11 +67,11 @@ export async function loginUser({ username, password }) {
       body: JSON.stringify({ username, password }),
     });
     const data = await res.json();
-    
+
     if (data.success && data.user) {
       setUser(data.user);
     }
-    
+
     return data;
   } catch (error) {
     console.error('Login error:', error);
@@ -120,7 +120,7 @@ export const doctorAuth = {
 // API request helper
 export const fetchWithAuth = async (url, options = {}) => {
   const token = getToken();
-  
+
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'Authorization': token ? `Bearer ${token}` : '',
@@ -137,16 +137,27 @@ export const fetchWithAuth = async (url, options = {}) => {
   try {
     const res = await fetch(url, config);
     const data = await res.json();
-    
+
     if (res.status === 401) {
       removeUser();
       window.location.href = '/login';
       return null;
     }
-    
+
     return data;
   } catch (error) {
     console.error('API request error:', error);
     return { success: false, error: 'Terjadi kesalahan pada server' };
   }
+};
+
+export const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return '';
+  // Handle direct API URLs
+  if (imageUrl.startsWith('/api/images/')) return imageUrl;
+  // Handle full URLs
+  if (imageUrl.startsWith('http')) return imageUrl;
+  // Extract ID and return API URL
+  const id = imageUrl.split('/').pop();
+  return `/api/images?id=${id}`;
 };

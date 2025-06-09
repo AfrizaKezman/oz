@@ -10,10 +10,15 @@ export default function ScanCard({
   setDiagnosis,
   recommendation,
   setRecommendation,
-  handleScanReview,
-  imageUrl // Add imageUrl prop
+  handleScanReview
 }) {
   const [imageError, setImageError] = useState(false);
+
+  // Helper function to handle image errors
+  const handleImageError = () => {
+    console.error('Failed to load image:', scan.imageUrl);
+    setImageError(true);
+  };
 
   return (
     <div
@@ -22,22 +27,27 @@ export default function ScanCard({
       }`}
     >
       <div className="flex gap-4">
-        <div className="w-32 h-32 relative rounded overflow-hidden cursor-pointer">
+        {/* Image Section */}
+        <div className="w-32 h-32 relative rounded-lg overflow-hidden bg-gray-100">
           {!imageError ? (
             <img
-              src={imageUrl}
+              src={scan.imageUrl}
               alt={`Wound scan from ${scan.username}`}
-              className="w-full h-full object-contain"
-              onClick={() => setSelectedImage(imageUrl)}
-              onError={() => setImageError(true)}
+              className="w-full h-full object-cover hover:opacity-75 transition-opacity cursor-pointer"
+              onClick={() => setSelectedImage(scan.imageUrl)}
+              onError={handleImageError}
               loading="lazy"
             />
           ) : (
             <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400">Gagal memuat gambar</p>
+              <p className="text-gray-400 text-sm text-center">
+                Gagal memuat gambar
+              </p>
             </div>
           )}
         </div>
+
+        {/* Content Section */}
         <div className="flex-1">
           <div className="flex justify-between items-start mb-3">
             <h3 className="font-medium text-purple-800">{scan.username}</h3>
